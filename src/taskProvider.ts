@@ -34,9 +34,27 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         const tasks: Task[] = [];
         const lines = editor.document.getText().split(/\r?\n/);
         for (let i = 0; i < lines.length; i++) {
-            const task = TaskParser.parse(lines[i], i);
+            const lineText = lines[i];
+            const task = TaskParser.parse(lineText, i);
             if (task) {
                 tasks.push(task);
+            } else {
+                // Check for header
+                const headerMatch = /^(\s*)(#+)\s+(.*)$/.exec(lineText);
+                if (headerMatch) {
+                    tasks.push({
+                        text: headerMatch[3],
+                        isCompleted: false,
+                        tags: [],
+                        lineNumber: i,
+                        indentation: headerMatch[1].length,
+                        isTask: false,
+                        isHeader: true
+                        // Note: We are jamming this into Task interface temporarily or need to update interface. 
+                        // To keep it simple, let's cast or update the interface.
+                        // Ideally, we should update the interface.
+                    } as any);
+                }
             }
         }
 
@@ -90,7 +108,9 @@ export class TaskTreeItem extends vscode.TreeItem {
                 }]
             };
 
-            if (task.isCompleted) {
+            if (task.isHeader) {
+                this.iconPath = new vscode.ThemeIcon('symbol-property');
+            } else if (task.isCompleted) {
                 this.iconPath = new vscode.ThemeIcon('check');
             } else {
                 this.iconPath = new vscode.ThemeIcon('circle-outline');

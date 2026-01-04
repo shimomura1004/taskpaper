@@ -12,6 +12,7 @@ export interface Task {
     lineNumber: number;
     indentation: number;
     isTask: boolean;
+    isHeader?: boolean;
 }
 
 export class TaskParser {
