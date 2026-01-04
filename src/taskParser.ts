@@ -13,6 +13,7 @@ export interface Task {
     indentation: number;
     isTask: boolean;
     isHeader?: boolean;
+    headerLevel?: number;
 }
 
 export class TaskParser {

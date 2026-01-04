@@ -25,11 +25,22 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
             ]);
         }
 
-        // Child elements (Tasks)
+        if (element.children && element.children.length > 0) {
+            return Promise.resolve(element.children);
+        }
+
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document.languageId !== 'markdown') {
             return Promise.resolve([]);
         }
+
+        // Optimization: For 'all' tasks, we rebuild the tree structure only when needed.
+        // But for simplicity, we parse document on every root expansion (when element.contextValue is one of the roots).
+        // Since we don't cache locally in this simple implementation, we assume parsing is fast enough.
+
+        // If we are here, it means we are expanding one of the root nodes or a node that has no computed children yet.
+        // Actually, for 'all' mode, buildTaskTree puts children into items. So if an item has children, it's handled above.
+        // If it returns here for 'all', it means we are at the 'All Tasks' root node.
 
         const tasks: Task[] = [];
         const lines = editor.document.getText().split(/\r?\n/);
@@ -49,35 +60,66 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                         lineNumber: i,
                         indentation: headerMatch[1].length,
                         isTask: false,
-                        isHeader: true
-                        // Note: We are jamming this into Task interface temporarily or need to update interface. 
-                        // To keep it simple, let's cast or update the interface.
-                        // Ideally, we should update the interface.
-                    } as any);
+                        isHeader: true,
+                        headerLevel: headerMatch[2].length
+                    });
                 }
             }
         }
 
-        let filteredTasks: Task[] = [];
         if (element.contextValue === 'all') {
-            filteredTasks = tasks;
+            return Promise.resolve(this.buildTaskTree(tasks));
         } else if (element.contextValue === 'completed') {
-            filteredTasks = tasks.filter(t => t.isCompleted);
+            return Promise.resolve(tasks.filter(t => t.isCompleted).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
         } else if (element.contextValue === 'today') {
             const todayStr = this.getTodayString();
-            filteredTasks = tasks.filter(t =>
+            return Promise.resolve(tasks.filter(t =>
                 t.tags.some(tag => tag.name === 'on' && tag.value === todayStr)
-            );
+            ).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
         }
 
-        return Promise.resolve(filteredTasks.map(task =>
-            new TaskTreeItem(
+        return Promise.resolve([]);
+    }
+
+    private buildTaskTree(tasks: Task[]): TaskTreeItem[] {
+        const rootItems: TaskTreeItem[] = [];
+        const stack: { item: TaskTreeItem, level: number }[] = [];
+
+        for (const task of tasks) {
+            const item = new TaskTreeItem(
                 task.text,
                 vscode.TreeItemCollapsibleState.None,
                 'task',
                 task
-            )
-        ));
+            );
+
+            if (task.isHeader) {
+                const level = task.headerLevel || 1;
+
+                // Pop items from stack that are deeper or equal to current level
+                while (stack.length > 0 && stack[stack.length - 1].level >= level) {
+                    stack.pop();
+                }
+
+                if (stack.length > 0) {
+                    const parent = stack[stack.length - 1].item;
+                    parent.addChild(item);
+                } else {
+                    rootItems.push(item);
+                }
+
+                stack.push({ item, level });
+            } else {
+                // It's a task. Add to the current header in stack, or root if no header.
+                if (stack.length > 0) {
+                    stack[stack.length - 1].item.addChild(item);
+                } else {
+                    rootItems.push(item);
+                }
+            }
+        }
+
+        return rootItems;
     }
 
     private getTodayString(): string {
@@ -90,9 +132,11 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
 }
 
 export class TaskTreeItem extends vscode.TreeItem {
+    public children: TaskTreeItem[] = [];
+
     constructor(
         public readonly label: string,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+        public collapsibleState: vscode.TreeItemCollapsibleState, // Removed readonly
         public readonly contextValue: string,
         public readonly task?: Task
     ) {
@@ -116,5 +160,10 @@ export class TaskTreeItem extends vscode.TreeItem {
                 this.iconPath = new vscode.ThemeIcon('circle-outline');
             }
         }
+    }
+
+    public addChild(child: TaskTreeItem) {
+        this.children.push(child);
+        this.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
     }
 }
