@@ -119,7 +119,21 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                 }
             }
         }
-        return rootItems;
+
+        // Helper function to check if an item or its children contain tasks
+        const itemHasTasks = (item: TaskTreeItem): boolean => {
+            if (item.task?.isTask) {
+                return true;
+            }
+            if (item.children && item.children.length > 0) {
+                // Recursively filter children and check if any survive
+                item.children = item.children.filter(child => itemHasTasks(child));
+                return item.children.length > 0;
+            }
+            return false;
+        };
+
+        return rootItems.filter(item => itemHasTasks(item));
     }
 
     private getTodayString(): string {
