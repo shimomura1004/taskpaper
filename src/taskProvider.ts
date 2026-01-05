@@ -40,6 +40,7 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                     tasks.push({
                         text: headerMatch[3],
                         isCompleted: false,
+                        isCancelled: false,
                         tags: [],
                         lineNumber: i,
                         indentation: headerMatch[1].length,
@@ -64,7 +65,7 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         } else if (this.mode === 'today') {
             const todayStr = this.getTodayString();
             return Promise.resolve(tasks.filter(t =>
-                t.tags.some(tag => tag.name === 'on' && tag.value === todayStr)
+                !t.isCancelled && t.tags.some(tag => tag.name === 'on' && tag.value === todayStr)
             ).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
         } else if (this.mode === 'week') {
             const today = new Date();
@@ -74,7 +75,7 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
             nextWeek.setHours(23, 59, 59, 999);
 
             return Promise.resolve(tasks.filter(t =>
-                t.tags.some(tag => {
+                !t.isCancelled && t.tags.some(tag => {
                     if ((tag.name === 'due' || tag.name === 'on') && tag.value) {
                         const date = new Date(tag.value);
                         return !isNaN(date.getTime()) && date >= today && date <= nextWeek;
@@ -170,6 +171,8 @@ export class TaskTreeItem extends vscode.TreeItem {
                 this.iconPath = new vscode.ThemeIcon('symbol-property');
             } else if (task.isCompleted) {
                 this.iconPath = new vscode.ThemeIcon('check');
+            } else if (task.isCancelled) {
+                this.iconPath = new vscode.ThemeIcon('circle-slash');
             } else {
                 this.iconPath = new vscode.ThemeIcon('circle-outline');
             }

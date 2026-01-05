@@ -8,6 +8,7 @@ export interface TaskTag {
 export interface Task {
     text: string;
     isCompleted: boolean;
+    isCancelled: boolean;
     tags: TaskTag[];
     lineNumber: number;
     indentation: number;
@@ -17,7 +18,7 @@ export interface Task {
 }
 
 export class TaskParser {
-    private static readonly TASK_REGEX = /^(\s*)-\s*\[([ x])\]\s*(.*)$/;
+    private static readonly TASK_REGEX = /^(\s*)-\s*\[([ x\-])\]\s*(.*)$/;
     private static readonly TAG_REGEX = /@([a-zA-Z0-9_]+)(?:\(([^)]+)\))?/g;
 
     public static parse(line: string, lineNumber: number): Task | null {
@@ -28,6 +29,7 @@ export class TaskParser {
 
         const indentation = match[1].length;
         const isCompleted = match[2] === 'x';
+        const isCancelled = match[2] === '-';
         const content = match[3];
 
         const tags: TaskTag[] = [];
@@ -43,6 +45,7 @@ export class TaskParser {
         return {
             text: content,
             isCompleted,
+            isCancelled,
             tags,
             lineNumber,
             indentation,
