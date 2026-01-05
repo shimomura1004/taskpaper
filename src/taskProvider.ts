@@ -21,7 +21,8 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
             return Promise.resolve([
                 new TaskTreeItem('All Tasks', vscode.TreeItemCollapsibleState.Expanded, 'all'),
                 new TaskTreeItem('Completed', vscode.TreeItemCollapsibleState.Collapsed, 'completed'),
-                new TaskTreeItem('Today', vscode.TreeItemCollapsibleState.Collapsed, 'today')
+                new TaskTreeItem('Today', vscode.TreeItemCollapsibleState.Collapsed, 'today'),
+                new TaskTreeItem('This Week', vscode.TreeItemCollapsibleState.Collapsed, 'week')
             ]);
         }
 
@@ -75,6 +76,24 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
             const todayStr = this.getTodayString();
             return Promise.resolve(tasks.filter(t =>
                 t.tags.some(tag => tag.name === 'on' && tag.value === todayStr)
+            ).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
+        } else if (element.contextValue === 'week') {
+            const today = new Date();
+            const nextWeek = new Date(today);
+            nextWeek.setDate(today.getDate() + 7);
+
+            // Normalize time
+            today.setHours(0, 0, 0, 0);
+            nextWeek.setHours(23, 59, 59, 999);
+
+            return Promise.resolve(tasks.filter(t =>
+                t.tags.some(tag => {
+                    if ((tag.name === 'due' || tag.name === 'on') && tag.value) {
+                        const date = new Date(tag.value);
+                        return !isNaN(date.getTime()) && date >= today && date <= nextWeek;
+                    }
+                    return false;
+                })
             ).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
         }
 
