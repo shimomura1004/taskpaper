@@ -7,9 +7,18 @@ export function activate(context: vscode.ExtensionContext) {
     console.log('Congratulations, your extension "taskpaper" is now active!');
 
     const decorator = new TaskDecorator();
-    const taskProvider = new TaskProvider();
 
-    vscode.window.registerTreeDataProvider('taskpaper-sidebar', taskProvider);
+    const outlineProvider = new TaskProvider('all');
+    const todayProvider = new TaskProvider('today');
+    const weekProvider = new TaskProvider('week');
+    const completedProvider = new TaskProvider('completed');
+
+    const providers = [outlineProvider, todayProvider, weekProvider, completedProvider];
+
+    vscode.window.registerTreeDataProvider('taskpaper-outline', outlineProvider);
+    vscode.window.registerTreeDataProvider('taskpaper-today', todayProvider);
+    vscode.window.registerTreeDataProvider('taskpaper-week', weekProvider);
+    vscode.window.registerTreeDataProvider('taskpaper-completed', completedProvider);
 
     let disposable = vscode.commands.registerCommand('taskpaper.helloWorld', () => {
         vscode.window.showInformationMessage('Hello World from TaskPaper!');
@@ -22,7 +31,7 @@ export function activate(context: vscode.ExtensionContext) {
     let addTagDisposable = vscode.commands.registerCommand('taskpaper.addTag', () => {
         const editor = vscode.window.activeTextEditor;
         if (editor) {
-            addTag(editor, {} as any); // edit param not used in async implementation
+            addTag(editor, {} as any);
         }
     });
 
@@ -37,17 +46,21 @@ export function activate(context: vscode.ExtensionContext) {
         searchTag();
     });
 
+    const refreshAll = () => {
+        providers.forEach(p => p.refresh());
+    };
+
     // Initial update
     if (vscode.window.activeTextEditor) {
         decorator.updateDecorations(vscode.window.activeTextEditor);
-        taskProvider.refresh();
+        refreshAll();
     }
 
     // Update on editor change
     vscode.window.onDidChangeActiveTextEditor(editor => {
         if (editor) {
             decorator.updateDecorations(editor);
-            taskProvider.refresh();
+            refreshAll();
         }
     }, null, context.subscriptions);
 
@@ -55,7 +68,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.workspace.onDidChangeTextDocument(event => {
         if (vscode.window.activeTextEditor && event.document === vscode.window.activeTextEditor.document) {
             decorator.updateDecorations(vscode.window.activeTextEditor);
-            taskProvider.refresh();
+            refreshAll();
         }
     }, null, context.subscriptions);
 

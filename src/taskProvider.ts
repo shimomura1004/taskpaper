@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import { TaskParser, Task } from './taskParser';
 
+export type TaskViewMode = 'all' | 'completed' | 'today' | 'week';
+
 export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<TaskTreeItem | undefined | null | void> = new vscode.EventEmitter<TaskTreeItem | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<TaskTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
-    constructor() { }
+    constructor(private mode: TaskViewMode) { }
 
     refresh(): void {
         this._onDidChangeTreeData.fire();
@@ -16,17 +18,7 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
     }
 
     getChildren(element?: TaskTreeItem): Thenable<TaskTreeItem[]> {
-        if (!element) {
-            // Root elements
-            return Promise.resolve([
-                new TaskTreeItem('All Tasks', vscode.TreeItemCollapsibleState.Expanded, 'all'),
-                new TaskTreeItem('Completed', vscode.TreeItemCollapsibleState.Collapsed, 'completed'),
-                new TaskTreeItem('Today', vscode.TreeItemCollapsibleState.Collapsed, 'today'),
-                new TaskTreeItem('This Week', vscode.TreeItemCollapsibleState.Collapsed, 'week')
-            ]);
-        }
-
-        if (element.children && element.children.length > 0) {
+        if (element && element.children && element.children.length > 0) {
             return Promise.resolve(element.children);
         }
 
@@ -34,14 +26,6 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         if (!editor || editor.document.languageId !== 'markdown') {
             return Promise.resolve([]);
         }
-
-        // Optimization: For 'all' tasks, we rebuild the tree structure only when needed.
-        // But for simplicity, we parse document on every root expansion (when element.contextValue is one of the roots).
-        // Since we don't cache locally in this simple implementation, we assume parsing is fast enough.
-
-        // If we are here, it means we are expanding one of the root nodes or a node that has no computed children yet.
-        // Actually, for 'all' mode, buildTaskTree puts children into items. So if an item has children, it's handled above.
-        // If it returns here for 'all', it means we are at the 'All Tasks' root node.
 
         const tasks: Task[] = [];
         const lines = editor.document.getText().split(/\r?\n/);
@@ -51,7 +35,6 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
             if (task) {
                 tasks.push(task);
             } else {
-                // Check for header
                 const headerMatch = /^(\s*)(#+)\s+(.*)$/.exec(lineText);
                 if (headerMatch) {
                     tasks.push({
@@ -68,21 +51,25 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
             }
         }
 
-        if (element.contextValue === 'all') {
+        // If we are expanding an item that has no children computed but is NOT a root call
+        if (element) {
+            return Promise.resolve([]);
+        }
+
+        // Root call for this specific provider
+        if (this.mode === 'all') {
             return Promise.resolve(this.buildTaskTree(tasks));
-        } else if (element.contextValue === 'completed') {
+        } else if (this.mode === 'completed') {
             return Promise.resolve(tasks.filter(t => t.isCompleted).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
-        } else if (element.contextValue === 'today') {
+        } else if (this.mode === 'today') {
             const todayStr = this.getTodayString();
             return Promise.resolve(tasks.filter(t =>
                 t.tags.some(tag => tag.name === 'on' && tag.value === todayStr)
             ).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
-        } else if (element.contextValue === 'week') {
+        } else if (this.mode === 'week') {
             const today = new Date();
             const nextWeek = new Date(today);
             nextWeek.setDate(today.getDate() + 7);
-
-            // Normalize time
             today.setHours(0, 0, 0, 0);
             nextWeek.setHours(23, 59, 59, 999);
 
@@ -114,22 +101,17 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
 
             if (task.isHeader) {
                 const level = task.headerLevel || 1;
-
-                // Pop items from stack that are deeper or equal to current level
                 while (stack.length > 0 && stack[stack.length - 1].level >= level) {
                     stack.pop();
                 }
-
                 if (stack.length > 0) {
                     const parent = stack[stack.length - 1].item;
                     parent.addChild(item);
                 } else {
                     rootItems.push(item);
                 }
-
                 stack.push({ item, level });
             } else {
-                // It's a task. Add to the current header in stack, or root if no header.
                 if (stack.length > 0) {
                     stack[stack.length - 1].item.addChild(item);
                 } else {
@@ -137,7 +119,6 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                 }
             }
         }
-
         return rootItems;
     }
 
@@ -155,7 +136,7 @@ export class TaskTreeItem extends vscode.TreeItem {
 
     constructor(
         public readonly label: string,
-        public collapsibleState: vscode.TreeItemCollapsibleState, // Removed readonly
+        public collapsibleState: vscode.TreeItemCollapsibleState,
         public readonly contextValue: string,
         public readonly task?: Task
     ) {

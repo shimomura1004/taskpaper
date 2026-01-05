@@ -24,8 +24,24 @@
     "views": {
       "taskpaper-explorer": [
         {
-          "id": "taskpaper-sidebar",
-          "name": "Task Outline"
+          "id": "taskpaper-outline",
+          "name": "Outline",
+          "icon": "resources/list.svg"
+        },
+        {
+          "id": "taskpaper-today",
+          "name": "Today",
+          "icon": "resources/list.svg"
+        },
+        {
+          "id": "taskpaper-week",
+          "name": "This Week",
+          "icon": "resources/list.svg"
+        },
+        {
+          "id": "taskpaper-completed",
+          "name": "Completed",
+          "icon": "resources/list.svg"
         }
       ]
     },
