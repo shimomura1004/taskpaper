@@ -31,10 +31,13 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         const lines = editor.document.getText().split(/\r?\n/);
         for (let i = 0; i < lines.length; i++) {
             const lineText = lines[i];
+            const nextLineText = i + 1 < lines.length ? lines[i + 1] : undefined;
             const task = TaskParser.parse(lineText, i);
+
             if (task) {
                 tasks.push(task);
             } else {
+                // Check for ATX header (#)
                 const headerMatch = /^(\s*)(#+)\s+(.*)$/.exec(lineText);
                 if (headerMatch) {
                     tasks.push({
@@ -48,6 +51,25 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                         isHeader: true,
                         headerLevel: headerMatch[2].length
                     });
+                } else if (nextLineText !== undefined) {
+                    // Check for Setext header (=== or ---)
+                    const setextMatch = /^(\s*)(=+|-+)\s*$/.exec(nextLineText);
+                    // Ensure the line before isn't empty and doesn't look like a task
+                    if (setextMatch && lineText.trim().length > 0) {
+                        const level = setextMatch[2].startsWith('=') ? 1 : 2;
+                        tasks.push({
+                            text: lineText.trim(),
+                            isCompleted: false,
+                            isCancelled: false,
+                            tags: [],
+                            lineNumber: i,
+                            indentation: 0,
+                            isTask: false,
+                            isHeader: true,
+                            headerLevel: level
+                        });
+                        i++; // Skip the underline line
+                    }
                 }
             }
         }
