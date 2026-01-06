@@ -80,6 +80,12 @@
       }
     ]
   },
+  "configurationDefaults": {
+    "workbench.colorCustomizations": {
+      "sideBarSectionHeader.background": "#8080801a",
+      "sideBarSectionHeader.foreground": "#cccccc"
+    }
+  },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
