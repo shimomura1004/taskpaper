@@ -17,7 +17,7 @@ export function toggleCompletion(editor: vscode.TextEditor, edit: vscode.TextEdi
 
                 if (task) {
                     const newStatus = task.isCompleted ? ' ' : 'x';
-                    const match = /^(\s*-\s*\[)([\sx])(\])/.exec(text);
+                    const match = /^(\s*-\s*\[)([\sx\-])(\])/.exec(text);
                     if (match) {
                         const range = new vscode.Range(
                             i,

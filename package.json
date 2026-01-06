@@ -70,6 +70,14 @@
         "title": "TaskPaper: Search Tag",
         "category": "TaskPaper"
       }
+    ],
+    "keybindings": [
+      {
+        "command": "taskpaper.toggleCompletion",
+        "key": "alt+d",
+        "mac": "alt+d",
+        "when": "editorTextFocus && editorLangId == markdown"
+      }
     ]
   },
   "scripts": {
