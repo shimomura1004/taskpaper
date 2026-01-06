@@ -178,7 +178,7 @@ export class TaskTreeItem extends vscode.TreeItem {
         public readonly task?: Task
     ) {
         super(label, collapsibleState);
-        this.tooltip = this.label;
+        this.tooltip = label;
 
         if (task) {
             this.command = {
@@ -190,7 +190,7 @@ export class TaskTreeItem extends vscode.TreeItem {
             };
 
             if (task.isHeader) {
-                this.iconPath = new vscode.ThemeIcon('symbol-property');
+                this.iconPath = new vscode.ThemeIcon('folder');
             } else if (task.isCompleted) {
                 this.iconPath = new vscode.ThemeIcon('check');
             } else if (task.isCancelled) {
