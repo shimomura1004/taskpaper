@@ -85,26 +85,68 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         } else if (this.mode === 'completed') {
             return Promise.resolve(tasks.filter(t => t.isCompleted).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
         } else if (this.mode === 'today') {
-            const todayStr = this.getTodayString();
-            return Promise.resolve(tasks.filter(t =>
-                !t.isCancelled && t.tags.some(tag => tag.name === 'on' && tag.value === todayStr)
-            ).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
-        } else if (this.mode === 'week') {
-            const today = new Date();
-            const nextWeek = new Date(today);
-            nextWeek.setDate(today.getDate() + 7);
-            today.setHours(0, 0, 0, 0);
-            nextWeek.setHours(23, 59, 59, 999);
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+            const todayEnd = new Date(todayStart);
+            todayEnd.setHours(23, 59, 59, 999);
 
-            return Promise.resolve(tasks.filter(t =>
-                !t.isCancelled && t.tags.some(tag => {
+            return Promise.resolve(tasks.filter(t => {
+                if (t.isCancelled) {
+                    return false;
+                }
+                return t.tags.some(tag => {
+                    if (tag.name === 'today') {
+                        return true;
+                    }
                     if ((tag.name === 'due' || tag.name === 'on') && tag.value) {
-                        const date = new Date(tag.value);
-                        return !isNaN(date.getTime()) && date >= today && date <= nextWeek;
+                        const date = this.parseDate(tag.value);
+                        if (!date) {
+                            return false;
+                        }
+                        // For Today view, show:
+                        // 1. Uncompleted tasks due on or before today
+                        // 2. Completed tasks due today
+                        if (t.isCompleted) {
+                            return date >= todayStart && date <= todayEnd;
+                        } else {
+                            return date <= todayEnd;
+                        }
                     }
                     return false;
-                })
-            ).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
+                });
+            }).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
+        } else if (this.mode === 'week') {
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+            const nextWeekEnd = new Date(todayStart);
+            nextWeekEnd.setDate(todayStart.getDate() + 7);
+            nextWeekEnd.setHours(23, 59, 59, 999);
+
+            return Promise.resolve(tasks.filter(t => {
+                if (t.isCancelled) {
+                    return false;
+                }
+                return t.tags.some(tag => {
+                    if (tag.name === 'today') {
+                        return true;
+                    }
+                    if ((tag.name === 'due' || tag.name === 'on') && tag.value) {
+                        const date = this.parseDate(tag.value);
+                        if (!date) {
+                            return false;
+                        }
+                        // For Week view, show:
+                        // 1. Uncompleted tasks due on or before next week
+                        // 2. Completed tasks due between today and next week
+                        if (t.isCompleted) {
+                            return date >= todayStart && date <= nextWeekEnd;
+                        } else {
+                            return date <= nextWeekEnd;
+                        }
+                    }
+                    return false;
+                });
+            }).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
         }
 
         return Promise.resolve([]);
@@ -159,12 +201,14 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         return rootItems.filter(item => itemHasTasks(item));
     }
 
-    private getTodayString(): string {
-        const now = new Date();
-        const yyyy = now.getFullYear();
-        const mm = String(now.getMonth() + 1).padStart(2, '0');
-        const dd = String(now.getDate()).padStart(2, '0');
-        return `${yyyy}/${mm}/${dd}`;
+    private parseDate(dateStr: string): Date | undefined {
+        const match = dateStr.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+        if (match) {
+            const [, y, m, d] = match;
+            const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+            return isNaN(date.getTime()) ? undefined : date;
+        }
+        return undefined;
     }
 }
 
