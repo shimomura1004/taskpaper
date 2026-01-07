@@ -1,17 +1,18 @@
 import * as vscode from 'vscode';
 import { TaskDecorator } from './taskDecorator';
-import { TaskProvider } from './taskProvider';
+import { TaskProvider, TaskManager } from './taskProvider';
 import { toggleCompletion, addTag, removeTag, searchTag } from './commands';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Congratulations, your extension "taskpaper" is now active!');
 
     const decorator = new TaskDecorator();
+    const taskManager = new TaskManager();
 
-    const outlineProvider = new TaskProvider('all');
-    const todayProvider = new TaskProvider('today');
-    const weekProvider = new TaskProvider('week');
-    const completedProvider = new TaskProvider('completed');
+    const outlineProvider = new TaskProvider('all', taskManager);
+    const todayProvider = new TaskProvider('today', taskManager);
+    const weekProvider = new TaskProvider('week', taskManager);
+    const completedProvider = new TaskProvider('completed', taskManager);
 
     const providers = [outlineProvider, todayProvider, weekProvider, completedProvider];
 
@@ -46,29 +47,28 @@ export function activate(context: vscode.ExtensionContext) {
         searchTag();
     });
 
-    const refreshAll = () => {
-        providers.forEach(p => p.refresh());
+    const updateAll = () => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            decorator.updateDecorations(editor);
+            taskManager.update();
+        }
     };
 
     // Initial update
-    if (vscode.window.activeTextEditor) {
-        decorator.updateDecorations(vscode.window.activeTextEditor);
-        refreshAll();
-    }
+    updateAll();
 
     // Update on editor change
     vscode.window.onDidChangeActiveTextEditor(editor => {
         if (editor) {
-            decorator.updateDecorations(editor);
-            refreshAll();
+            updateAll();
         }
     }, null, context.subscriptions);
 
     // Update on content change
     vscode.workspace.onDidChangeTextDocument(event => {
         if (vscode.window.activeTextEditor && event.document === vscode.window.activeTextEditor.document) {
-            decorator.updateDecorations(vscode.window.activeTextEditor);
-            refreshAll();
+            updateAll();
         }
     }, null, context.subscriptions);
 

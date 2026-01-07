@@ -3,31 +3,20 @@ import { TaskParser, Task } from './taskParser';
 
 export type TaskViewMode = 'all' | 'completed' | 'today' | 'week';
 
-export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<TaskTreeItem | undefined | null | void> = new vscode.EventEmitter<TaskTreeItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<TaskTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+export class TaskManager {
+    private tasks: Task[] = [];
+    private _onDidUpdateTasks: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
+    readonly onDidUpdateTasks: vscode.Event<void> = this._onDidUpdateTasks.event;
 
-    constructor(private mode: TaskViewMode) { }
-
-    refresh(): void {
-        this._onDidChangeTreeData.fire();
-    }
-
-    getTreeItem(element: TaskTreeItem): vscode.TreeItem {
-        return element;
-    }
-
-    getChildren(element?: TaskTreeItem): Thenable<TaskTreeItem[]> {
-        if (element && element.children && element.children.length > 0) {
-            return Promise.resolve(element.children);
-        }
-
+    public update(): void {
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document.languageId !== 'markdown') {
-            return Promise.resolve([]);
+            this.tasks = [];
+            this._onDidUpdateTasks.fire();
+            return;
         }
 
-        const tasks: Task[] = [];
+        const newTasks: Task[] = [];
         const lines = editor.document.getText().split(/\r?\n/);
         for (let i = 0; i < lines.length; i++) {
             const lineText = lines[i];
@@ -35,12 +24,12 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
             const task = TaskParser.parse(lineText, i);
 
             if (task) {
-                tasks.push(task);
+                newTasks.push(task);
             } else {
                 // Check for ATX header (#)
                 const headerMatch = /^(\s*)(#+)\s+(.*)$/.exec(lineText);
                 if (headerMatch) {
-                    tasks.push({
+                    newTasks.push({
                         text: headerMatch[3],
                         isCompleted: false,
                         isCancelled: false,
@@ -54,10 +43,9 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                 } else if (nextLineText !== undefined) {
                     // Check for Setext header (=== or ---)
                     const setextMatch = /^(\s*)(=+|-+)\s*$/.exec(nextLineText);
-                    // Ensure the line before isn't empty and doesn't look like a task
                     if (setextMatch && lineText.trim().length > 0) {
                         const level = setextMatch[2].startsWith('=') ? 1 : 2;
-                        tasks.push({
+                        newTasks.push({
                             text: lineText.trim(),
                             isCompleted: false,
                             isCancelled: false,
@@ -73,9 +61,42 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                 }
             }
         }
+        this.tasks = newTasks;
+        this._onDidUpdateTasks.fire();
+    }
 
-        // If we are expanding an item that has no children computed but is NOT a root call
+    public getTasks(): Task[] {
+        return this.tasks;
+    }
+}
+
+export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<TaskTreeItem | undefined | null | void> = new vscode.EventEmitter<TaskTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<TaskTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    constructor(private mode: TaskViewMode, private taskManager: TaskManager) {
+        this.taskManager.onDidUpdateTasks(() => this.refresh());
+    }
+
+    refresh(): void {
+        this._onDidChangeTreeData.fire();
+    }
+
+    getTreeItem(element: TaskTreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    getChildren(element?: TaskTreeItem): Thenable<TaskTreeItem[]> {
+        if (element && element.children && element.children.length > 0) {
+            return Promise.resolve(element.children);
+        }
+
         if (element) {
+            return Promise.resolve([]);
+        }
+
+        const tasks = this.taskManager.getTasks();
+        if (tasks.length === 0) {
             return Promise.resolve([]);
         }
 
@@ -103,9 +124,6 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                         if (!date) {
                             return false;
                         }
-                        // For Today view, show:
-                        // 1. Uncompleted tasks due on or before today
-                        // 2. Completed tasks due today
                         if (t.isCompleted) {
                             return date >= todayStart && date <= todayEnd;
                         } else {
@@ -135,9 +153,6 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                         if (!date) {
                             return false;
                         }
-                        // For Week view, show:
-                        // 1. Uncompleted tasks due on or before next week
-                        // 2. Completed tasks due between today and next week
                         if (t.isCompleted) {
                             return date >= todayStart && date <= nextWeekEnd;
                         } else {
@@ -185,13 +200,11 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
             }
         }
 
-        // Helper function to check if an item or its children contain tasks
         const itemHasTasks = (item: TaskTreeItem): boolean => {
             if (item.task?.isTask) {
                 return true;
             }
             if (item.children && item.children.length > 0) {
-                // Recursively filter children and check if any survive
                 item.children = item.children.filter(child => itemHasTasks(child));
                 return item.children.length > 0;
             }
