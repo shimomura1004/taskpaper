@@ -103,16 +103,23 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         // Root call for this specific provider
         if (this.mode === 'all') {
             return Promise.resolve(this.buildTaskTree(tasks));
-        } else if (this.mode === 'completed') {
-            return Promise.resolve(tasks.filter(t => t.isCompleted).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
+        }
+
+        return Promise.resolve(this.getFilteredTasks().map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
+    }
+
+    private getFilteredTasks(): Task[] {
+        const tasks = this.taskManager.getTasks();
+        if (this.mode === 'completed') {
+            return tasks.filter(t => t.isTask && t.isCompleted);
         } else if (this.mode === 'today') {
             const todayStart = new Date();
             todayStart.setHours(0, 0, 0, 0);
             const todayEnd = new Date(todayStart);
             todayEnd.setHours(23, 59, 59, 999);
 
-            return Promise.resolve(tasks.filter(t => {
-                if (t.isCancelled) {
+            return tasks.filter(t => {
+                if (t.isCancelled || !t.isTask) {
                     return false;
                 }
                 return t.tags.some(tag => {
@@ -132,7 +139,7 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                     }
                     return false;
                 });
-            }).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
+            });
         } else if (this.mode === 'week') {
             const todayStart = new Date();
             todayStart.setHours(0, 0, 0, 0);
@@ -140,8 +147,8 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
             nextWeekEnd.setDate(todayStart.getDate() + 7);
             nextWeekEnd.setHours(23, 59, 59, 999);
 
-            return Promise.resolve(tasks.filter(t => {
-                if (t.isCancelled) {
+            return tasks.filter(t => {
+                if (t.isCancelled || !t.isTask) {
                     return false;
                 }
                 return t.tags.some(tag => {
@@ -161,10 +168,16 @@ export class TaskProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                     }
                     return false;
                 });
-            }).map(t => new TaskTreeItem(t.text, vscode.TreeItemCollapsibleState.None, 'task', t)));
+            });
+        } else if (this.mode === 'all') {
+            return tasks.filter(t => t.isTask);
         }
 
-        return Promise.resolve([]);
+        return [];
+    }
+
+    public getTaskCount(): number {
+        return this.getFilteredTasks().length;
     }
 
     private buildTaskTree(tasks: Task[]): TaskTreeItem[] {

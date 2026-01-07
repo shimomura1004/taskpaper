@@ -16,10 +16,29 @@ export function activate(context: vscode.ExtensionContext) {
 
     const providers = [outlineProvider, todayProvider, weekProvider, completedProvider];
 
-    vscode.window.registerTreeDataProvider('taskpaper-outline', outlineProvider);
-    vscode.window.registerTreeDataProvider('taskpaper-today', todayProvider);
-    vscode.window.registerTreeDataProvider('taskpaper-week', weekProvider);
-    vscode.window.registerTreeDataProvider('taskpaper-completed', completedProvider);
+    const outlineView = vscode.window.createTreeView('taskpaper-outline', { treeDataProvider: outlineProvider });
+    const todayView = vscode.window.createTreeView('taskpaper-today', { treeDataProvider: todayProvider });
+    const weekView = vscode.window.createTreeView('taskpaper-week', { treeDataProvider: weekProvider });
+    const completedView = vscode.window.createTreeView('taskpaper-completed', { treeDataProvider: completedProvider });
+
+    const updateViews = () => {
+        const outlineCount = outlineProvider.getTaskCount();
+        const todayCount = todayProvider.getTaskCount();
+        const weekCount = weekProvider.getTaskCount();
+        const completedCount = completedProvider.getTaskCount();
+
+        outlineView.description = outlineCount > 0 ? `${outlineCount}` : '';
+        todayView.description = todayCount > 0 ? `${todayCount}` : '';
+        weekView.description = weekCount > 0 ? `${weekCount}` : '';
+        completedView.description = completedCount > 0 ? `${completedCount}` : '';
+    };
+
+    taskManager.onDidUpdateTasks(() => {
+        updateViews();
+    });
+
+    // Initial update
+    updateViews();
 
     let disposable = vscode.commands.registerCommand('taskpaper.helloWorld', () => {
         vscode.window.showInformationMessage('Hello World from TaskPaper!');
@@ -77,6 +96,10 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(addTagDisposable);
     context.subscriptions.push(removeTagDisposable);
     context.subscriptions.push(searchTagDisposable);
+    context.subscriptions.push(outlineView);
+    context.subscriptions.push(todayView);
+    context.subscriptions.push(weekView);
+    context.subscriptions.push(completedView);
     context.subscriptions.push({ dispose: () => decorator.dispose() });
 }
 
